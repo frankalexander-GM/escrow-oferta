@@ -8,11 +8,43 @@ const { ErrorAplicacion } = require("../dominio/errores");
 const { ROLES, aBytes32, normalizarOrden, aDireccion } = require("../dominio/orden");
 const { aWei, aEther } = require("../dominio/dinero");
 
+const SEGUNDOS_POR_HORA = 3600;
+const PLAZO_POR_DEFECTO_HORAS = 24;
+const MONTO_POR_DEFECTO = "1";
+
 function crearServicio({ ctx, repositorio }) {
   const { direcciones } = ctx;
 
-  async function ordenDe(clave) {
+  async function ordenNormalizada(clave) {
     return normalizarOrden(clave, await repositorio.verOrden(clave));
+  }
+
+  /** Respuesta común a toda operación que termina devolviendo una orden. */
+  async function respuestaDeOrden(clave, recibo) {
+    return { ok: true, tx: recibo.hash, orden: await ordenNormalizada(clave) };
+  }
+
+  async function saldosPorRol() {
+    const saldos = {};
+    for (const rol of ROLES) {
+      const cuenta = direcciones[rol];
+      saldos[rol] = cuenta ? aEther(await repositorio.saldoPendiente(cuenta)) : null;
+    }
+    return saldos;
+  }
+
+  function cuentasConfiguradas() {
+    return Object.fromEntries(
+      ROLES.filter((rol) => direcciones[rol]).map((rol) => [rol, direcciones[rol]])
+    );
+  }
+
+  function plazoEnSegundos(plazoHoras, ahora) {
+    const horas = Number(plazoHoras);
+    if (!Number.isFinite(horas) || horas <= 0) {
+      throw new ErrorAplicacion("plazoHoras debe ser un número mayor que 0");
+    }
+    return ahora + Math.max(1, Math.round(horas)) * SEGUNDOS_POR_HORA;
   }
 
   function salud() {
@@ -20,12 +52,6 @@ function crearServicio({ ctx, repositorio }) {
   }
 
   async function estado() {
-    const saldos = {};
-    for (const rol of ROLES) {
-      const cuenta = direcciones[rol];
-      saldos[rol] = cuenta ? aEther(await repositorio.saldoPendiente(cuenta)) : null;
-    }
-
     return {
       red: ctx.red,
       contrato: ctx.direccion,
@@ -33,35 +59,25 @@ function crearServicio({ ctx, repositorio }) {
       comisionBps: Number(await repositorio.comisionBps()),
       custodiaEther: aEther(await repositorio.totalEnCustodia()),
       balanceEther: aEther(await repositorio.balanceContrato()),
-      cuentas: Object.fromEntries(
-        ROLES.filter((rol) => direcciones[rol]).map((rol) => [rol, direcciones[rol]])
-      ),
-      saldosPendientesEther: saldos,
+      cuentas: cuentasConfiguradas(),
+      saldosPendientesEther: await saldosPorRol(),
       contabilidadCuadra: await repositorio.contabilidadCuadra(),
       pausado: await repositorio.pausado(),
     };
   }
 
-  async function crearOrden({ id, vendedor, plazoHoras = 24 } = {}) {
+  async function crearOrden({ id, vendedor, plazoHoras = PLAZO_POR_DEFECTO_HORAS } = {}) {
     const clave = aBytes32(id);
     const destino = aDireccion(vendedor || "vendedor", direcciones);
-
-    const horas = Number(plazoHoras);
-    if (!Number.isFinite(horas) || horas <= 0) {
-      throw new ErrorAplicacion("plazoHoras debe ser un número mayor que 0");
-    }
-
     const ahora = await repositorio.ultimoTimestamp();
-    const plazo = ahora + Math.max(1, Math.round(horas)) * 3600;
+    const plazo = plazoEnSegundos(plazoHoras, ahora);
 
-    const recibo = await repositorio.crearOrden(clave, destino, plazo);
-    return { ok: true, tx: recibo.hash, orden: await ordenDe(clave) };
+    return respuestaDeOrden(clave, await repositorio.crearOrden(clave, destino, plazo));
   }
 
-  async function financiar(id, { montoEther = "1" } = {}) {
+  async function financiar(id, { montoEther = MONTO_POR_DEFECTO } = {}) {
     const clave = aBytes32(id);
-    const recibo = await repositorio.financiar(clave, aWei(montoEther));
-    return { ok: true, tx: recibo.hash, orden: await ordenDe(clave) };
+    return respuestaDeOrden(clave, await repositorio.financiar(clave, aWei(montoEther)));
   }
 
   const ACCIONES = {
@@ -72,18 +88,17 @@ function crearServicio({ ctx, repositorio }) {
   };
 
   async function ejecutarAccion(nombre, id) {
-    const ejecutar = ACCIONES[nombre];
-    if (!ejecutar) throw new ErrorAplicacion(`Acción desconocida: ${nombre}`, 404);
+    const accion = ACCIONES[nombre];
+    if (!accion) throw new ErrorAplicacion(`Acción desconocida: ${nombre}`, 404);
 
     const clave = aBytes32(id);
-    const recibo = await ejecutar(clave);
-    return { ok: true, tx: recibo.hash, orden: await ordenDe(clave) };
+    return respuestaDeOrden(clave, await accion(clave));
   }
 
   async function resolver(id, { aFavorDelVendedor } = {}) {
     const clave = aBytes32(id);
     const recibo = await repositorio.resolverDisputa(clave, Boolean(aFavorDelVendedor));
-    return { ok: true, tx: recibo.hash, orden: await ordenDe(clave) };
+    return respuestaDeOrden(clave, recibo);
   }
 
   async function retirar({ rol } = {}) {
@@ -102,7 +117,7 @@ function crearServicio({ ctx, repositorio }) {
 
   async function consultarOrden(id) {
     const clave = aBytes32(id);
-    return { ok: true, orden: await ordenDe(clave) };
+    return { ok: true, orden: await ordenNormalizada(clave) };
   }
 
   async function pausar() {

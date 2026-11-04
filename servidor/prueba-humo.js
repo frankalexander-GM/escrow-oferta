@@ -78,7 +78,13 @@ function comprobar(nombre, condicion, detalle = "") {
   }
 }
 
-async function main() {
+const ORDEN_DEMO = { vendedor: "vendedor", plazoHoras: 24 };
+
+function crearOrden(id) {
+  return api("POST", "/api/ordenes", { id, ...ORDEN_DEMO });
+}
+
+async function levantarEntorno() {
   console.log("• Levantando cadena local…");
   arrancar("npx", ["hardhat", "node", "--hostname", "127.0.0.1"]);
   await esperarJsonRpc();
@@ -90,23 +96,19 @@ async function main() {
     COMISION_BPS: "350",
   });
   await esperarApi();
+}
 
-  console.log("\n• Flujo completo por HTTP\n");
-
+async function comprobarArranque() {
   const salud = await api("GET", "/salud");
   comprobar("GET /salud responde", salud.status === 200 && salud.datos.ok);
   comprobar("contrato desplegado", /^0x[0-9a-fA-F]{40}$/.test(salud.datos.contrato || ""));
+}
 
-  const creada = await api("POST", "/api/ordenes", {
-    id: "humo-1",
-    vendedor: "vendedor",
-    plazoHoras: 24,
-  });
+async function crearYFinanciar() {
+  const creada = await crearOrden("humo-1");
   comprobar("crear orden", creada.status === 200 && creada.datos.orden.estado === "Creado");
 
-  const financiada = await api("POST", "/api/ordenes/humo-1/financiar", {
-    montoEther: "0.5",
-  });
+  const financiada = await api("POST", "/api/ordenes/humo-1/financiar", { montoEther: "0.5" });
   comprobar(
     "financiar 0,5 ETH",
     financiada.status === 200 &&
@@ -114,44 +116,46 @@ async function main() {
       financiada.datos.orden.montoEther === "0.5"
   );
 
-  const estado1 = await api("GET", "/api/estado");
-  comprobar("custodia = 0,5 ETH", estado1.datos.custodiaEther === "0.5");
-  comprobar("contabilidad cuadra", estado1.datos.contabilidadCuadra === true);
+  const estado = await api("GET", "/api/estado");
+  comprobar("custodia = 0,5 ETH", estado.datos.custodiaEther === "0.5");
+  comprobar("contabilidad cuadra", estado.datos.contabilidadCuadra === true);
+}
 
+async function liberarYRetirar() {
   const confirmada = await api("POST", "/api/ordenes/humo-1/confirmar");
   comprobar(
     "confirmar entrega",
     confirmada.status === 200 && confirmada.datos.orden.estado === "Liberado"
   );
 
-  const estado2 = await api("GET", "/api/estado");
-  comprobar("vendedor cobra 0,4825", estado2.datos.saldosPendientesEther.vendedor === "0.4825");
-  comprobar("árbitro cobra 0,0175", estado2.datos.saldosPendientesEther.arbitro === "0.0175");
-  comprobar("custodia a cero", estado2.datos.custodiaEther === "0.0");
+  const estado = await api("GET", "/api/estado");
+  comprobar("vendedor cobra 0,4825", estado.datos.saldosPendientesEther.vendedor === "0.4825");
+  comprobar("árbitro cobra 0,0175", estado.datos.saldosPendientesEther.arbitro === "0.0175");
+  comprobar("custodia a cero", estado.datos.custodiaEther === "0.0");
 
-  const retiroVendedor = await api("POST", "/api/retirar", { rol: "vendedor" });
-  comprobar("retirar vendedor", retiroVendedor.status === 200);
-  const retiroArbitro = await api("POST", "/api/retirar", { rol: "arbitro" });
-  comprobar("retirar árbitro", retiroArbitro.status === 200);
+  const vendedor = await api("POST", "/api/retirar", { rol: "vendedor" });
+  comprobar("retirar vendedor", vendedor.status === 200);
+  const arbitro = await api("POST", "/api/retirar", { rol: "arbitro" });
+  comprobar("retirar árbitro", arbitro.status === 200);
 
   const final = await api("GET", "/api/estado");
   comprobar("contrato vacío", final.datos.balanceEther === "0.0");
+}
 
+async function comprobarIdempotencia() {
   const repetida = await api("POST", "/api/ordenes/humo-1/confirmar");
   comprobar(
     "confirmar dos veces da 400",
     repetida.status === 400 && repetida.datos.error === "EstadoInvalido"
   );
+}
 
-  // Circuit breaker: la pausa corta la entrada de dinero, no la salida.
+/** Circuit breaker: la pausa corta la entrada de dinero, no la salida. */
+async function comprobarPausa() {
   const pausa = await api("POST", "/api/pausar");
   comprobar("pausar", pausa.status === 200 && pausa.datos.pausado === true);
 
-  const bloqueada = await api("POST", "/api/ordenes", {
-    id: "humo-2",
-    vendedor: "vendedor",
-    plazoHoras: 24,
-  });
+  const bloqueada = await crearOrden("humo-2");
   comprobar(
     "crear con el contrato pausado da 400",
     bloqueada.status === 400 && bloqueada.datos.error === "ContratoPausado"
@@ -160,12 +164,19 @@ async function main() {
   const reanudado = await api("POST", "/api/reanudar");
   comprobar("reanudar", reanudado.status === 200 && reanudado.datos.pausado === false);
 
-  const trasReanudar = await api("POST", "/api/ordenes", {
-    id: "humo-2",
-    vendedor: "vendedor",
-    plazoHoras: 24,
-  });
-  comprobar("crear tras reanudar", trasReanudar.status === 200);
+  const permitida = await crearOrden("humo-2");
+  comprobar("crear tras reanudar", permitida.status === 200);
+}
+
+async function main() {
+  await levantarEntorno();
+
+  console.log("\n• Flujo completo por HTTP\n");
+  await comprobarArranque();
+  await crearYFinanciar();
+  await liberarYRetirar();
+  await comprobarIdempotencia();
+  await comprobarPausa();
 
   console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} fallo(s)\n`);
 }

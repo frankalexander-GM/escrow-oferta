@@ -186,6 +186,21 @@ Decisiones que conviene saber explicar:
   ejecuta contra un repositorio falso: si alguien mete una dependencia de la
   cadena en esa capa, el test deja de compilar sin necesidad de red.
 
+### Refactor de limpieza (skill `clean-code`)
+
+Aplicado sobre el código que ya funcionaba, sin cambiar comportamiento:
+
+| Antes                                         | Después                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| 4 respuestas `{ ok, tx, orden }` copiadas     | un `respuestaDeOrden()`                                             |
+| `estado()` con 20 líneas y 8 awaits mezclados | `estado()` + `saldosPorRol()` + `cuentasConfiguradas()`             |
+| `3600`, `24`, `"1"` sueltos en el código      | `SEGUNDOS_POR_HORA`, `PLAZO_POR_DEFECTO_HORAS`, `MONTO_POR_DEFECTO` |
+| `main()` de la prueba de humo con 80 líneas   | 12 líneas que orquestan 5 funciones con nombre                      |
+| `ordenDe()`                                   | `ordenNormalizada()` (dice qué devuelve)                            |
+
+En los tests **no** se eliminó duplicación a propósito: un test explícito se lee
+mejor que uno parametrizado, y esa repetición es deliberada, no un descuido.
+
 ## Cómo ejecutarlo en local
 
 ```powershell
