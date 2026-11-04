@@ -143,6 +143,30 @@ async function main() {
     repetida.status === 400 && repetida.datos.error === "EstadoInvalido"
   );
 
+  // Circuit breaker: la pausa corta la entrada de dinero, no la salida.
+  const pausa = await api("POST", "/api/pausar");
+  comprobar("pausar", pausa.status === 200 && pausa.datos.pausado === true);
+
+  const bloqueada = await api("POST", "/api/ordenes", {
+    id: "humo-2",
+    vendedor: "vendedor",
+    plazoHoras: 24,
+  });
+  comprobar(
+    "crear con el contrato pausado da 400",
+    bloqueada.status === 400 && bloqueada.datos.error === "ContratoPausado"
+  );
+
+  const reanudado = await api("POST", "/api/reanudar");
+  comprobar("reanudar", reanudado.status === 200 && reanudado.datos.pausado === false);
+
+  const trasReanudar = await api("POST", "/api/ordenes", {
+    id: "humo-2",
+    vendedor: "vendedor",
+    plazoHoras: 24,
+  });
+  comprobar("crear tras reanudar", trasReanudar.status === 200);
+
   console.log(fallos === 0 ? "\nTODO OK\n" : `\n${fallos} fallo(s)\n`);
 }
 

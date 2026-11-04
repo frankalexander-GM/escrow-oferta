@@ -10,9 +10,9 @@ Coolify.
 
 ```
 Compiled 1 Solidity file successfully (evm target: paris)
-20 passing (1s)                    # tests del contrato
+25 passing (1s)                    # tests del contrato
 8 passing                          # tests de la capa de servicios (sin cadena)
-14 comprobaciones OK               # prueba de humo HTTP
+18 comprobaciones OK               # prueba de humo HTTP
 ```
 
 ## El flujo en una imagen
@@ -44,6 +44,7 @@ comprador                     contrato                     vendedor
 | `cancelar(id)`                    | vendedor             | devolución voluntaria        |
 | `abrirDisputa(id)`                | comprador o vendedor | conflicto                    |
 | `resolverDisputa(id, bool)`       | árbitro              | decide todo a una parte      |
+| `pausar()` / `reanudar()`         | árbitro              | parada de emergencia         |
 | `retirar()`                       | cualquiera con saldo | cobra lo acumulado           |
 
 ## Decisiones de diseño que importan
@@ -96,7 +97,7 @@ perder la dirección. Lo que sí está separado es todo lo de fuera.
 ```
 escrow-oferta/
 ├── contracts/EscrowOferta.sol        el contrato
-├── test/EscrowOferta.test.js         20 tests del contrato
+├── test/EscrowOferta.test.js         25 tests del contrato
 ├── test/servicio.test.js             8 tests de la capa de servicios
 ├── scripts/desplegar.js              despliegue por CLI
 ├── scripts/exportar-abi.js           ABI → servidor/abi tras compilar
@@ -118,6 +119,44 @@ escrow-oferta/
 └── COOLIFY.md                        guía de despliegue paso a paso
 ```
 
+## Auditoría de seguridad (skill `solidity-security`)
+
+El contrato se revisó contra el checklist de 15 puntos de la skill
+`wshobson/agents@solidity-security`. Resultado:
+
+| Punto del checklist               | Estado                                               |
+| --------------------------------- | ---------------------------------------------------- |
+| Reentrancy (CEI + guard)          | ✅ `retirar()` pone el saldo a cero antes del `call` |
+| Overflow / underflow              | ✅ Solidity 0.8.24 revierte solo                     |
+| Control de acceso                 | ✅ `arbitro` inmutable y comprobación por rol        |
+| Pull over push                    | ✅ saldos acreditados; cada uno retira lo suyo       |
+| Llamadas externas al final        | ✅ una sola, en `retirar()`                          |
+| Retorno de llamadas comprobado    | ✅ `TransferenciaFallida`                            |
+| Sin `tx.origin` ni `delegatecall` | ✅                                                   |
+| Sin direcciones hardcodeadas      | ✅ constructor                                       |
+| Evento en cada cambio de estado   | ✅                                                   |
+| **Invariante contable**           | ⚠️ era `balance >= custodia` → corregido             |
+| **Parada de emergencia**          | ❌ no existía → añadida                              |
+| **Financiar orden vencida**       | ❌ se permitía → ahora `PlazoVencido`                |
+| **Id cero**                       | ❌ se aceptaba → ahora `IdInvalido`                  |
+| Front-running (commit-reveal)     | ➖ no aplica: no hay swaps ni precios                |
+| Upgrade (proxy)                   | ➖ no aplica: el contrato es inmutable por diseño    |
+
+### Los cuatro arreglos
+
+1. **`totalPendiente`**: nuevo acumulador. `contabilidadCuadra()` exige ahora
+   `balance == custodia + pendiente`, exacto en vez de una cota inferior. Sin
+   esto, un descuadre de hasta el saldo pendiente pasaba desapercibido.
+2. **`pausar()` / `reanudar()`**: circuit breaker del árbitro que bloquea
+   `crearOrden` y `financiar`. **Nunca** bloquea `retirar`, `confirmarEntrega`,
+   `reclamarVencimiento` ni `resolverDisputa`: una pausa no puede atrapar dinero.
+3. **`PlazoVencido`**: no se puede depositar en una orden cuyo plazo ya pasó.
+4. **`IdInvalido`**: `bytes32(0)` deja de ser un identificador válido.
+
+Cada arreglo tiene su test en el bloque `seguridad (checklist solidity-security)`
+de `test/EscrowOferta.test.js`, y la pausa se prueba también de punta a punta por
+HTTP.
+
 ## Calidad de código
 
 Todo el proyecto pasa las mismas comprobaciones antes de entregarse:
@@ -131,7 +170,7 @@ npm run verificar     # eslint + solhint + prettier + 28 tests
 | `npm run lint`     | ESLint 9 (flat config): variables muertas, `==` flojo, `var`, sombras, coerciones implícitas |
 | `npm run lint:sol` | Solhint sobre el contrato: visibilidad, orden de funciones, natspec                          |
 | `npm run formato`  | Prettier + plugin de Solidity, ancho 100 columnas                                            |
-| `npm test`         | 20 tests del contrato + 8 de la capa de servicios                                            |
+| `npm test`         | 25 tests del contrato + 8 de la capa de servicios                                            |
 
 Decisiones que conviene saber explicar:
 
@@ -166,7 +205,7 @@ node servidor/prueba-humo.js
 
 Levanta un nodo Hardhat, arranca la API (que despliega el contrato sola) y recorre
 el flujo completo por HTTP: crear, financiar, confirmar, retirar, y comprobar que
-un segundo intento de confirmar falla con `EstadoInvalido`. 14 comprobaciones.
+un segundo intento de confirmar falla con `EstadoInvalido`. 18 comprobaciones.
 
 Para ver el panel:
 
@@ -189,6 +228,8 @@ node servidor/index.js               # con un nodo en 8545
 | POST   | `/api/ordenes/:id/disputa`   | congela la orden                       |
 | POST   | `/api/ordenes/:id/resolver`  | `{ aFavorDelVendedor }`                |
 | POST   | `/api/retirar`               | `{ rol }`                              |
+| POST   | `/api/pausar`                | corta la entrada de dinero             |
+| POST   | `/api/reanudar`              | vuelve a la normalidad                 |
 | GET    | `/api/ordenes/:id`           | estado de una orden                    |
 
 Los errores del contrato llegan con su nombre (`EstadoInvalido`,

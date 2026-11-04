@@ -217,6 +217,8 @@
         </label>
         <button class="primario" onclick="retirar()">Retirar</button>
         <button onclick="consultar()">Consultar orden</button>
+        <button onclick="administracion('pausar')">Pausar entradas</button>
+        <button onclick="administracion('reanudar')">Reanudar</button>
       </section>
 
       <section class="card ancho">
@@ -299,6 +301,11 @@
 
       async function consultar() {
         await api("GET", `/api/ordenes/${idActual()}`);
+      }
+
+      async function administracion(accion) {
+        await api("POST", `/api/${accion}`);
+        refrescar();
       }
 
       async function refrescar() {

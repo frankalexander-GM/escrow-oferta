@@ -42,6 +42,7 @@ function crearRepositorio(ctx) {
     arbitro: () => contrato.arbitro(),
     comisionBps: () => contrato.comisionBps(),
     contabilidadCuadra: () => contrato.contabilidadCuadra(),
+    pausado: () => contrato.pausado(),
     ultimoTimestamp: async () => (await provider.getBlock("latest")).timestamp,
 
     // ----------------------------------------------------------- comandos
@@ -62,6 +63,10 @@ function crearRepositorio(ctx) {
       ejecutar("arbitro", "resolverDisputa", [clave, aFavorDelVendedor]),
 
     retirar: (rol) => ejecutar(rol, "retirar", []),
+
+    pausar: () => ejecutar("arbitro", "pausar", []),
+
+    reanudar: () => ejecutar("arbitro", "reanudar", []),
   };
 }
 

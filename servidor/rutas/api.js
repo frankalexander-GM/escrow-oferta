@@ -51,6 +51,14 @@ function crearRouter(servicio) {
     "/retirar",
     ruta((req) => servicio.retirar(req.body))
   );
+  router.post(
+    "/pausar",
+    ruta(() => servicio.pausar())
+  );
+  router.post(
+    "/reanudar",
+    ruta(() => servicio.reanudar())
+  );
 
   return router;
 }

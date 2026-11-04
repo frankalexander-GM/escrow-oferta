@@ -28,8 +28,10 @@ describe("EscrowOferta", function () {
       [comprador, vendedor, arbitro, intruso].map((s) => escrow.saldoPendiente(s.address))
     );
     const pendientes = cuentas.reduce((a, b) => a + b, 0n);
+    const totalPendiente = await escrow.totalPendiente();
 
     expect(saldoContrato).to.equal(custodia + pendientes);
+    expect(totalPendiente).to.equal(pendientes);
     expect(await escrow.contabilidadCuadra()).to.equal(true);
     return { saldoContrato, custodia, pendientes };
   }
@@ -266,6 +268,79 @@ describe("EscrowOferta", function () {
       await expect(
         escrow.connect(comprador).abrirDisputa(id("oferta-1"))
       ).to.be.revertedWithCustomError(escrow, "EstadoInvalido");
+    });
+  });
+
+  describe("seguridad (checklist solidity-security)", function () {
+    let plazo;
+
+    beforeEach(async () => {
+      plazo = (await time.latest()) + SIETE_DIAS;
+    });
+
+    it("la pausa bloquea entradas, pero nunca las salidas", async function () {
+      await escrow.connect(comprador).crearOrden(id("oferta-1"), vendedor.address, plazo);
+      await escrow.connect(comprador).financiar(id("oferta-1"), { value: PRECIO });
+
+      await expect(escrow.connect(arbitro).pausar())
+        .to.emit(escrow, "Pausado")
+        .withArgs(arbitro.address);
+      expect(await escrow.pausado()).to.equal(true);
+
+      await expect(
+        escrow.connect(comprador).crearOrden(id("oferta-2"), vendedor.address, plazo)
+      ).to.be.revertedWithCustomError(escrow, "ContratoPausado");
+      await expect(
+        escrow.connect(comprador).financiar(id("oferta-2"), { value: PRECIO })
+      ).to.be.revertedWithCustomError(escrow, "ContratoPausado");
+
+      // El dinero ya depositado sigue saliendo con el contrato pausado
+      await escrow.connect(comprador).confirmarEntrega(id("oferta-1"));
+      await expect(escrow.connect(vendedor).retirar()).to.changeEtherBalance(vendedor, AL_VENDEDOR);
+
+      await expect(escrow.connect(arbitro).reanudar())
+        .to.emit(escrow, "Reanudado")
+        .withArgs(arbitro.address);
+      expect(await escrow.pausado()).to.equal(false);
+
+      await invariante();
+    });
+
+    it("solo el árbitro puede pausar o reanudar", async function () {
+      await expect(escrow.connect(intruso).pausar()).to.be.revertedWithCustomError(
+        escrow,
+        "NoAutorizado"
+      );
+      await expect(escrow.connect(comprador).reanudar()).to.be.revertedWithCustomError(
+        escrow,
+        "NoAutorizado"
+      );
+    });
+
+    it("la pausa no impide resolver una disputa", async function () {
+      await escrow.connect(comprador).crearOrden(id("oferta-1"), vendedor.address, plazo);
+      await escrow.connect(comprador).financiar(id("oferta-1"), { value: PRECIO });
+      await escrow.connect(comprador).abrirDisputa(id("oferta-1"));
+      await escrow.connect(arbitro).pausar();
+
+      await escrow.connect(arbitro).resolverDisputa(id("oferta-1"), false);
+      expect(await escrow.saldoPendiente(comprador.address)).to.equal(PRECIO);
+      await expect(escrow.connect(comprador).retirar()).to.changeEtherBalance(comprador, PRECIO);
+    });
+
+    it("no se puede financiar una orden con el plazo vencido", async function () {
+      await escrow.connect(comprador).crearOrden(id("oferta-1"), vendedor.address, plazo);
+      await time.increaseTo(plazo + 1);
+
+      await expect(
+        escrow.connect(comprador).financiar(id("oferta-1"), { value: PRECIO })
+      ).to.be.revertedWithCustomError(escrow, "PlazoVencido");
+    });
+
+    it("rechaza el id cero como identificador de orden", async function () {
+      await expect(
+        escrow.connect(comprador).crearOrden(ethers.ZeroHash, vendedor.address, plazo)
+      ).to.be.revertedWithCustomError(escrow, "IdInvalido");
     });
   });
 

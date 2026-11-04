@@ -48,6 +48,7 @@ function crearRepositorioFalso({ saldos = {}, estadoOrden = ORDEN_FINANCIADA } =
     arbitro: async () => CUENTAS.arbitro,
     comisionBps: async () => 350n,
     contabilidadCuadra: async () => true,
+    pausado: async () => false,
     ultimoTimestamp: async () => 1_700_000_000,
     crearOrden: anotar("crearOrden"),
     financiar: anotar("financiar"),
@@ -57,6 +58,8 @@ function crearRepositorioFalso({ saldos = {}, estadoOrden = ORDEN_FINANCIADA } =
     abrirDisputa: anotar("abrirDisputa"),
     resolverDisputa: anotar("resolverDisputa"),
     retirar: anotar("retirar"),
+    pausar: anotar("pausar"),
+    reanudar: anotar("reanudar"),
   };
 }
 

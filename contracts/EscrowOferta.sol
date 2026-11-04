@@ -47,9 +47,15 @@ contract EscrowOferta {
     /// @notice Saldo acreditable a cada dirección (patrón pull).
     mapping(address => uint256) public saldoPendiente;
 
-    /// @notice Dinero total atrapado en órdenes financiadas. Debe cuadrar con
-    ///         `address(this).balance - sum(saldoPendiente)`.
+    /// @notice Dinero total atrapado en órdenes financiadas.
     uint256 public totalEnCustodia;
+
+    /// @notice Suma de todos los saldos pendientes de retirar. Permite que el
+    ///         invariante sea exacto: balance == totalEnCustodia + totalPendiente.
+    uint256 public totalPendiente;
+
+    /// @notice Parada de emergencia: bloquea nuevas entradas, nunca las salidas.
+    bool public pausado;
 
     uint256 private _cerrojo = 1;
 
@@ -67,6 +73,8 @@ contract EscrowOferta {
     event DisputaAbierta(bytes32 indexed id, address indexed por);
     event DisputaResuelta(bytes32 indexed id, bool aFavorDelVendedor);
     event Retirado(address indexed cuenta, uint256 monto);
+    event Pausado(address indexed por);
+    event Reanudado(address indexed por);
 
     // --------------------------------------------------------------- errores
 
@@ -81,6 +89,9 @@ contract EscrowOferta {
     error TransferenciaFallida();
     error Reentrada();
     error NoAceptaEtherDirecto();
+    error ContratoPausado();
+    error PlazoVencido();
+    error IdInvalido();
 
     // --------------------------------------------------------------- módulos
 
@@ -89,6 +100,12 @@ contract EscrowOferta {
         _cerrojo = 2;
         _;
         _cerrojo = 1;
+    }
+
+    /// @dev Solo frena la entrada de dinero; retirar y resolver siguen abiertos.
+    modifier cuandoNoPausado() {
+        if (pausado) revert ContratoPausado();
+        _;
     }
 
     constructor(address _arbitro, uint16 _comisionBps) {
@@ -102,7 +119,13 @@ contract EscrowOferta {
 
     /// @notice El comprador registra la orden indicando a quién pagará.
     /// @param id Identificador externo (normalmente keccak256 del id de la oferta).
-    function crearOrden(bytes32 id, address vendedor, uint64 plazoEntrega) external {
+    function crearOrden(
+        bytes32 id,
+        address vendedor,
+        uint64 plazoEntrega
+    ) external cuandoNoPausado {
+        if (id == bytes32(0)) revert IdInvalido();
+
         Orden storage o = _ordenes[id];
         if (o.estado != Estado.Inexistente) revert EstadoInvalido(o.estado);
         if (vendedor == address(0) || vendedor == msg.sender) revert NoAutorizado();
@@ -120,11 +143,12 @@ contract EscrowOferta {
     }
 
     /// @notice El comprador deposita el importe acordado. Nadie más puede.
-    function financiar(bytes32 id) external payable {
+    function financiar(bytes32 id) external payable cuandoNoPausado {
         Orden storage o = _ordenes[id];
         if (o.comprador == address(0)) revert OrdenInexistente();
         if (msg.sender != o.comprador) revert NoAutorizado();
         if (o.estado != Estado.Creado) revert EstadoInvalido(o.estado);
+        if (block.timestamp >= o.plazoEntrega) revert PlazoVencido();
         if (msg.value == 0 || msg.value > type(uint128).max) revert ImporteInvalido();
 
         o.monto = uint128(msg.value);
@@ -197,12 +221,27 @@ contract EscrowOferta {
         emit DisputaResuelta(id, aFavorDelVendedor);
     }
 
+    /// @notice Frena la entrada de dinero nuevo. No bloquea retiradas ni disputas.
+    function pausar() external {
+        if (msg.sender != arbitro) revert NoAutorizado();
+        pausado = true;
+        emit Pausado(msg.sender);
+    }
+
+    /// @notice Reanuda la operación normal.
+    function reanudar() external {
+        if (msg.sender != arbitro) revert NoAutorizado();
+        pausado = false;
+        emit Reanudado(msg.sender);
+    }
+
     /// @notice Retira el saldo acumulado a favor de quien llama.
     function retirar() external nonReentrant {
         uint256 monto = saldoPendiente[msg.sender];
         if (monto == 0) revert SinSaldo();
 
         saldoPendiente[msg.sender] = 0; // efectos antes de la interacción
+        totalPendiente -= monto;
 
         (bool ok, ) = payable(msg.sender).call{value: monto}("");
         if (!ok) revert TransferenciaFallida();
@@ -222,6 +261,7 @@ contract EscrowOferta {
         o.monto = 0;
         o.estado = Estado.Liberado;
         totalEnCustodia -= total;
+        totalPendiente += total;
 
         saldoPendiente[o.vendedor] += alVendedor;
         if (comision > 0) saldoPendiente[arbitro] += comision;
@@ -233,6 +273,7 @@ contract EscrowOferta {
         o.monto = 0;
         o.estado = Estado.Reembolsado;
         totalEnCustodia -= monto;
+        totalPendiente += monto;
 
         saldoPendiente[o.comprador] += monto;
     }
@@ -243,10 +284,10 @@ contract EscrowOferta {
         return _ordenes[id];
     }
 
-    /// @notice Comprobación de integridad: el ETH del contrato debe ser igual
-    ///         a la custodia más todo lo pendiente de retirar.
+    /// @notice Comprobación de integridad: el ETH del contrato debe ser
+    ///         exactamente la custodia más todo lo pendiente de retirar.
     function contabilidadCuadra() external view returns (bool) {
-        return address(this).balance >= totalEnCustodia;
+        return address(this).balance == totalEnCustodia + totalPendiente;
     }
 
     // --------------------------------------------------------------- defensas

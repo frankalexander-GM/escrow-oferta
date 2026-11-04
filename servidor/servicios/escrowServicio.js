@@ -38,6 +38,7 @@ function crearServicio({ ctx, repositorio }) {
       ),
       saldosPendientesEther: saldos,
       contabilidadCuadra: await repositorio.contabilidadCuadra(),
+      pausado: await repositorio.pausado(),
     };
   }
 
@@ -104,6 +105,16 @@ function crearServicio({ ctx, repositorio }) {
     return { ok: true, orden: await ordenDe(clave) };
   }
 
+  async function pausar() {
+    const recibo = await repositorio.pausar();
+    return { ok: true, pausado: true, tx: recibo.hash };
+  }
+
+  async function reanudar() {
+    const recibo = await repositorio.reanudar();
+    return { ok: true, pausado: false, tx: recibo.hash };
+  }
+
   return {
     salud,
     estado,
@@ -113,6 +124,8 @@ function crearServicio({ ctx, repositorio }) {
     resolver,
     retirar,
     consultarOrden,
+    pausar,
+    reanudar,
   };
 }
 
