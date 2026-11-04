@@ -94,7 +94,7 @@ perder la dirección. Lo que sí está separado es todo lo de fuera.
 ## Estructura
 
 ```
-contrato-inteligente/
+escrow-oferta/
 ├── contracts/EscrowOferta.sol        el contrato
 ├── test/EscrowOferta.test.js         20 tests del contrato
 ├── test/servicio.test.js             8 tests de la capa de servicios
@@ -200,7 +200,7 @@ Guía completa: **[COOLIFY.md](COOLIFY.md)**
 
 Resumen: `docker compose up -d --build` levanta dos contenedores — un nodo
 blockchain local y la API/panel en el puerto 3000. En Coolify se importa el repo
-como Docker Compose con _Base Directory_ `/contrato-inteligente`.
+como Docker Compose con _Base Directory_ `/`.
 
 ## Cómo se conecta con la app Flutter
 
