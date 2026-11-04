@@ -150,7 +150,8 @@ Decisiones que conviene saber explicar:
 ## Cómo ejecutarlo en local
 
 ```powershell
-cd contrato-inteligente
+git clone https://github.com/frankalexander-GM/escrow-oferta.git
+cd escrow-oferta
 npm install
 npx hardhat test                     # 28 tests (20 contrato + 8 servicios)
 npx hardhat node                     # nodo local con cuentas de prueba

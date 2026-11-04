@@ -35,22 +35,19 @@ Empieza por el modo A. Es el que funciona en 5 minutos sin cuentas ni claves.
 
 # Modo A — cadena local en el servidor
 
-## 1. Sube el repo a GitHub
+## 1. El repositorio ya está en GitHub
 
-Coolify despliega desde un repositorio. Si el proyecto está en tu PC:
+https://github.com/frankalexander-GM/escrow-oferta (público, rama `main`)
+
+Para trabajar desde otra máquina:
 
 ```powershell
-cd contrato-inteligente
-git init
-git add .
-git commit -m "Escrow + API + panel"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/escrow-oferta.git
-git push -u origin main
+git clone https://github.com/frankalexander-GM/escrow-oferta.git
+cd escrow-oferta
 ```
 
-`.dockerignore` ya excluye `node_modules`, `cache` y `test`, así que la imagen no
-se llena de basura.
+`.dockerignore` excluye `node_modules`, `cache`, `test` y `artifacts`, así que la
+imagen no se llena de basura. Los artefactos se compilan dentro del contenedor.
 
 ## 2. Crea el recurso en Coolify
 
@@ -58,10 +55,10 @@ se llena de basura.
 2. **Private Repository (with GitHub App)** o **Public Repository**, según cómo
    hayas conectado el repo.
 3. Rellena:
-   - **Repository**: `TU_USUARIO/escrow-oferta`
+   - **Repository**: `frankalexander-GM/escrow-oferta`
    - **Branch**: `main`
    - **Build Pack**: `Docker Compose`
-   - **Base Directory**: `/contrato-inteligente`
+   - **Base Directory**: `/` (la raíz del repo es el proyecto)
    - **Docker Compose Location**: `/docker-compose.yml`
 4. **Save**.
 
@@ -154,8 +151,8 @@ Y **borra el servicio `cadena`** y el bloque `depends_on`.
 # Alternativa sin Coolify (VPS pelado)
 
 ```bash
-git clone https://github.com/TU_USUARIO/escrow-oferta.git
-cd escrow-oferta/contrato-inteligente
+git clone https://github.com/frankalexander-GM/escrow-oferta.git
+cd escrow-oferta
 docker compose up -d --build
 docker compose logs -f api
 ```
