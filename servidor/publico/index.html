@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EscrowOferta · panel de control</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        background: #0b0d12;
+        color: #e7e9ee;
+        padding: 28px 20px 60px;
+      }
+      header {
+        max-width: 1080px;
+        margin: 0 auto 22px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0;
+        letter-spacing: -0.3px;
+      }
+      .pill {
+        font-size: 12px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: #1a1f2b;
+        border: 1px solid #2a3242;
+        color: #9aa4b8;
+      }
+      .pill.ok {
+        background: #10261a;
+        border-color: #1d4d31;
+        color: #5fd08a;
+      }
+      .pill.err {
+        background: #2a1416;
+        border-color: #5a2328;
+        color: #f2777f;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: #12161f;
+        border: 1px solid #222a38;
+        border-radius: 14px;
+        padding: 16px 16px 18px;
+      }
+      .ancho {
+        grid-column: 1 / -1;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.9px;
+        color: #7d879c;
+        margin: 0 0 12px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: #8b95a9;
+        margin-bottom: 9px;
+      }
+      input,
+      select {
+        width: 100%;
+        margin-top: 4px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        background: #0d1117;
+        border: 1px solid #2a3242;
+        color: #e7e9ee;
+        font-size: 14px;
+      }
+      input:focus,
+      select:focus {
+        outline: none;
+        border-color: #4a7bd0;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        padding: 9px 13px;
+        border-radius: 9px;
+        cursor: pointer;
+        background: #1b2333;
+        border: 1px solid #2f3a4d;
+        color: #dfe4ee;
+        margin: 0 6px 6px 0;
+      }
+      button:hover {
+        background: #222c40;
+      }
+      button.primario {
+        background: #2b5fd9;
+        border-color: #3a6ff0;
+        color: #fff;
+      }
+      button.primario:hover {
+        background: #3468e2;
+      }
+      pre {
+        margin: 0;
+        padding: 12px;
+        border-radius: 10px;
+        background: #0a0d13;
+        border: 1px solid #1d2431;
+        font-size: 12.5px;
+        line-height: 1.6;
+        overflow: auto;
+        max-height: 260px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .fila {
+        display: flex;
+        gap: 10px;
+      }
+      .fila > label {
+        flex: 1;
+      }
+      .mini {
+        font-size: 11px;
+        color: #66708a;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>EscrowOferta</h1>
+      <span id="salud" class="pill">conectando…</span>
+      <span id="contrato" class="pill"></span>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>1 · Crear orden</h2>
+        <div class="fila">
+          <label
+            >Id de la oferta
+            <input id="idOrden" value="oferta-001" />
+          </label>
+          <label
+            >Plazo
+            <input id="plazo" type="number" value="24" min="1" />
+          </label>
+        </div>
+        <label
+          >Vendedor
+          <input id="vendedor" value="vendedor" placeholder="rol o 0x…" />
+        </label>
+        <button class="primario" onclick="crear()">Crear orden</button>
+        <div class="mini">
+          El comprador es la cuenta del servidor. El vendedor, el rol indicado.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · Financiar</h2>
+        <label
+          >Importe en ETH
+          <input id="monto" value="1.0" />
+        </label>
+        <button class="primario" onclick="financiar()">Depositar en custodia</button>
+        <div class="mini">
+          El dinero entra al contrato. Nadie puede tocarlo hasta liberar o devolver.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>3 · Resolver la orden</h2>
+        <button onclick="accion('confirmar')">Confirmar entrega</button>
+        <button onclick="accion('cancelar')">Cancelar (vendedor)</button>
+        <button onclick="accion('disputa')">Abrir disputa</button>
+        <button onclick="accion('reclamar')">Reclamar vencimiento</button>
+        <button onclick="resolver(true)">Árbitro: al vendedor</button>
+        <button onclick="resolver(false)">Árbitro: al comprador</button>
+      </section>
+
+      <section class="card">
+        <h2>4 · Cobrar saldo</h2>
+        <label
+          >Cuenta
+          <select id="rolCobro">
+            <option value="vendedor">vendedor</option>
+            <option value="arbitro">árbitro / plataforma</option>
+            <option value="comprador">comprador</option>
+          </select>
+        </label>
+        <button class="primario" onclick="retirar()">Retirar</button>
+        <button onclick="consultar()">Consultar orden</button>
+      </section>
+
+      <section class="card ancho">
+        <h2>Estado del contrato</h2>
+        <pre id="estado">—</pre>
+      </section>
+
+      <section class="card ancho">
+        <h2>Orden</h2>
+        <pre id="orden">—</pre>
+      </section>
+
+      <section class="card ancho">
+        <h2>Registro</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function pintar(destino, datos) {
+        $(destino).textContent = typeof datos === "string" ? datos : JSON.stringify(datos, null, 2);
+      }
+
+      function registrar(metodo, ruta, cuerpo, respuesta) {
+        const hora = new Date().toLocaleTimeString();
+        const linea =
+          `${hora}  ${metodo} ${ruta}\n` +
+          (cuerpo ? `→ ${JSON.stringify(cuerpo)}\n` : "") +
+          `← ${JSON.stringify(respuesta)}\n`;
+        $("log").textContent = linea + $("log").textContent;
+      }
+
+      async function api(metodo, ruta, cuerpo) {
+        const respuesta = await fetch(ruta, {
+          method: metodo,
+          headers: { "content-type": "application/json" },
+          body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+        });
+        const datos = await respuesta.json();
+        registrar(metodo, ruta, cuerpo, datos);
+        if (datos.orden) pintar("orden", datos.orden);
+        if (!respuesta.ok) throw new Error(datos.error || "Error");
+        return datos;
+      }
+
+      const idActual = () => encodeURIComponent($("idOrden").value.trim());
+
+      async function crear() {
+        await api("POST", "/api/ordenes", {
+          id: $("idOrden").value.trim(),
+          vendedor: $("vendedor").value.trim() || "vendedor",
+          plazoHoras: Number($("plazo").value) || 24,
+        });
+        refrescar();
+      }
+
+      async function financiar() {
+        await api("POST", `/api/ordenes/${idActual()}/financiar`, {
+          montoEther: $("monto").value.trim(),
+        });
+        refrescar();
+      }
+
+      async function accion(nombre) {
+        await api("POST", `/api/ordenes/${idActual()}/${nombre}`);
+        refrescar();
+      }
+
+      async function resolver(aFavorDelVendedor) {
+        await api("POST", `/api/ordenes/${idActual()}/resolver`, { aFavorDelVendedor });
+        refrescar();
+      }
+
+      async function retirar() {
+        await api("POST", "/api/retirar", { rol: $("rolCobro").value });
+        refrescar();
+      }
+
+      async function consultar() {
+        await api("GET", `/api/ordenes/${idActual()}`);
+      }
+
+      async function refrescar() {
+        try {
+          const estado = await api("GET", "/api/estado");
+          pintar("estado", estado);
+          $("salud").textContent = "conectado";
+          $("salud").className = "pill ok";
+          $("contrato").textContent = estado.contrato;
+        } catch (error) {
+          $("salud").textContent = "sin conexión";
+          $("salud").className = "pill err";
+        }
+      }
+
+      refrescar();
+      setInterval(refrescar, 5000);
+    </script>
+  </body>
+</html>

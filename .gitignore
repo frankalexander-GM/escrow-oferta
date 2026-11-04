@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Artefactos de compilación (se regeneran con `npm run compilar`)
+artifacts/
+cache/
+typechain-types/
+servidor/abi/
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Registros y temporales
+*.log
+prueba.log
+
+# Sistema
+.DS_Store
+Thumbs.db

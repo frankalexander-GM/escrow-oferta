@@ -1,0 +1,34 @@
+{
+  "name": "contrato-inteligente",
+  "version": "1.0.0",
+  "description": "Escrow de ofertas en Solidity: contrato funcional con tests",
+  "scripts": {
+    "test": "hardhat test",
+    "compilar": "hardhat compile && node scripts/exportar-abi.js",
+    "nodo": "hardhat node",
+    "desplegar": "hardhat run scripts/desplegar.js",
+    "lint": "eslint .",
+    "lint:sol": "solhint \"contracts/**/*.sol\"",
+    "formato": "prettier --write .",
+    "formato:check": "prettier --check .",
+    "verificar": "npm run lint && npm run lint:sol && npm run formato:check && npm test"
+  },
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "express": "^5.3.0",
+    "hardhat": "^2.29.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0",
+    "prettier": "^3.9.10",
+    "prettier-plugin-solidity": "^2.4.1",
+    "solhint": "^5.2.0"
+  }
+}
