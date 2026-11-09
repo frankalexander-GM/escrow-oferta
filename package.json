@@ -19,9 +19,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
     "express": "^5.3.0",
-    "hardhat": "^2.29.1"
+    "hardhat": "^3.21.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
